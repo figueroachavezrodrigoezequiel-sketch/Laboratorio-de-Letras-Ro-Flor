@@ -3,28 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Laboratorio de Letras (v28 - PDF Académico Real) 🏛️</title>
+    <title>Laboratorio de Letras (v29 - PDF Nativo) 🏛️</title>
     
     <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <style>
-        /* --- ESTILOS GENERALES (PANTALLA) --- */
+        /* --- ESTILOS DE PANTALLA (App Normal) --- */
         :root { --primary: #2c3e50; --accent: #d35400; --bg: #f9f7f1; --white: #ffffff; --text-serif: 'Merriweather', serif; --font-title: 'Playfair Display', serif; }
         body { font-family: var(--text-serif); background: var(--bg); margin: 0; display: flex; height: 100vh; overflow: hidden; color: #2c3e50; }
 
-        /* LOGIN */
+        /* OCULTAR ELEMENTOS AL IMPRIMIR */
+        @media print {
+            body * { visibility: hidden; } /* Oculta todo por defecto */
+            #pdf-printable-area, #pdf-printable-area * { 
+                visibility: visible; /* Solo muestra el área de impresión */
+            }
+            #pdf-printable-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                background: white;
+                color: black;
+            }
+            
+            /* REGLAS ACADÉMICAS ESTRICTAS PARA PAPEL */
+            .academic-doc {
+                font-family: 'Times New Roman', Times, serif !important;
+                font-size: 12pt !important;
+                line-height: 1.5 !important;
+                text-align: justify !important;
+                color: #000 !important;
+            }
+            .academic-doc h1 { font-size: 18pt !important; text-align: center; text-decoration: underline; margin-bottom: 20px; }
+            .academic-doc h2 { font-size: 14pt !important; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #000; }
+            .academic-doc p, .academic-doc div { 
+                margin-bottom: 1em !important; 
+                orphans: 3; /* Evita dejar una línea sola al final de la hoja */
+                widows: 3;  /* Evita dejar una línea sola al inicio de la hoja */
+                page-break-inside: avoid; /* PROHIBIDO CORTAR PÁRRAFOS */
+            }
+            .academic-doc mark {
+                background-color: #ffeb3b !important;
+                -webkit-print-color-adjust: exact; /* Fuerza a imprimir el color de fondo */
+                print-color-adjust: exact;
+            }
+            /* Ocultar botones y menús del sistema */
+            #login-screen, aside, header, .modal-overlay { display: none !important; }
+        }
+
+        /* --- ESTILOS INTERFAZ WEB --- */
         #login-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #2c3e50; display: flex; justify-content: center; align-items: center; z-index: 2000; flex-direction: column; color: white; background-image: radial-gradient(#34495e 1px, transparent 1px); background-size: 20px 20px; }
         .login-box { background: var(--bg); padding: 40px; border-radius: 4px; width: 320px; color: #333; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
         .login-box input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; box-sizing: border-box; }
         .btn-login { background: var(--primary); color: white; border: none; padding: 12px; width: 100%; font-weight: bold; cursor: pointer; text-transform: uppercase; }
         .switch-auth { margin-top: 15px; font-size: 0.8em; cursor: pointer; text-decoration: underline; color: #777; }
 
-        /* APP LAYOUT */
         #app-screen { display: none; width: 100%; height: 100%; display: flex; }
         aside { width: 260px; background: #222; color: #eee; display: flex; flex-direction: column; padding: 25px; z-index: 10; font-family: sans-serif; }
         .materia-item { padding: 12px; cursor: pointer; border-radius: 4px; margin-bottom: 8px; font-size: 0.9rem; border-left: 3px solid transparent; }
@@ -35,47 +75,6 @@
         .search-bar { padding: 10px 20px; border: 1px solid #ccc; border-radius: 20px; width: 250px; outline: none; font-family: sans-serif; background: white; }
         .content-area { padding: 40px; max-width: 900px; margin: 0 auto; width: 100%; box-sizing: border-box; }
 
-        /* --- ⚠️ REGLAS MAESTRAS DE PDF ACADÉMICO ⚠️ --- */
-        /* Estas reglas SOLO se usan dentro del contenedor de impresión */
-        .academic-pdf-container {
-            font-family: 'Times New Roman', serif !important;
-            font-size: 12pt !important;
-            color: #000 !important;
-            line-height: 1.5 !important;
-            text-align: justify !important; /* Justificado académico */
-            background: white !important;
-            padding: 40px !important;
-            width: 100%;
-            max-width: 800px;
-        }
-
-        .academic-pdf-container h1 { font-size: 18pt; text-align: center; text-transform: uppercase; text-decoration: underline; margin-bottom: 30px; }
-        .academic-pdf-container h2 { font-size: 14pt; margin-top: 0; margin-bottom: 5px; text-decoration: underline; page-break-after: avoid; }
-        .academic-pdf-container p.meta { font-size: 11pt; font-style: italic; margin-bottom: 20px; }
-        .academic-pdf-container hr { border: 0; border-top: 1px solid #000; margin: 20px 0; }
-
-        /* CUERPO DEL TEXTO: La magia para respetar estructura + formato académico */
-        .academic-body {
-            display: block;
-            width: 100%;
-        }
-        
-        /* 1. Respetar espacios visuales (Enter) */
-        .academic-body div, 
-        .academic-body p {
-            margin-bottom: 1em !important; /* Añade aire real entre párrafos */
-            display: block !important;
-            page-break-inside: avoid; /* Evita cortes feos */
-        }
-
-        /* 2. Resaltados en Impresión */
-        .academic-body mark {
-            background-color: #ffeb3b !important;
-            color: black !important;
-            padding: 0 2px;
-        }
-
-        /* CARDS */
         .book-card { background: white; padding: 25px; margin-bottom: 30px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); display: flex; gap: 25px; border: 1px solid #eee; position: relative; }
         .book-card.ficcion { border-left: 4px solid var(--accent); }
         .book-card.teoria { border-left: 4px solid #8e44ad; }
@@ -90,7 +89,6 @@
         .btn-std { background: var(--primary); color: white; border: none; padding: 8px 15px; border-radius: 3px; font-family: sans-serif; font-weight: bold; cursor: pointer; font-size: 0.85rem; margin-left: 5px; }
         .btn-add { background: var(--accent); width: 100%; padding: 12px; font-size: 1rem; margin-top: 10px; color:white; border:none; cursor:pointer; font-weight:bold;}
 
-        /* EDITOR ZEN */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(44, 62, 80, 0.95); z-index: 5000; justify-content: center; align-items: center; }
         .zen-editor { display: grid; grid-template-columns: 250px 1fr; grid-template-rows: 1fr auto; gap: 0; width: 95%; height: 90vh; background: #fdfdfd; box-shadow: 0 20px 50px rgba(0,0,0,0.5); overflow: hidden; }
         .zen-sidebar { background: #f4f4f4; padding: 20px; border-right: 1px solid #ddd; display: flex; flex-direction: column; gap: 15px; font-family: sans-serif; grid-row: 1 / span 2; overflow-y: auto; }
@@ -106,7 +104,6 @@
         .zen-textarea { flex: 1; border: none; outline: none; font-family: var(--text-serif); font-size: 1.15rem; line-height: 1.8; color: #333; min-height: 300px; white-space: pre-wrap; }
         .zen-footer { grid-column: 2; grid-row: 2; background: #222; padding: 15px 30px; display: flex; justify-content: flex-end; align-items: center; color: white; gap:10px; z-index: 10; }
 
-        /* UPLOAD & EXTRAS */
         .panel { background: white; padding: 30px; border-radius: 2px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 40px; border: 1px solid #e0e0e0; position: relative; }
         .panel::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: var(--primary); }
         .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px; }
@@ -118,7 +115,6 @@
         .size-warning { color: orange; font-size: 0.8em; display: none; margin-top: 5px; }
         .card-footer-date { font-size: 0.75em; color: #aaa; margin-top: 15px; text-align: right; border-top: 1px solid #f0f0f0; padding-top: 10px; }
 
-        /* IA & TIMELINE */
         .ai-modal-content { background: white; width: 600px; padding: 30px; border-radius: 8px; font-family: sans-serif; position: relative; border-top: 5px solid #8e44ad; }
         .btn-ai-custom { background: #8e44ad; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%; margin-top:5px; }
         .ai-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px; }
@@ -130,17 +126,8 @@
         .timeline-item::before { content: ''; position: absolute; left: -10px; width: 16px; height: 16px; background: var(--accent); border-radius: 50%; border: 2px solid white; }
         .timeline-img { width: 50px; height: 70px; object-fit: cover; margin-right: 15px; border-radius: 4px; border: 1px solid #ccc; }
 
-        /* CAPA OCULTA DE GENERACIÓN */
-        #pdf-generation-layer {
-            position: fixed;
-            top: 0; left: 0;
-            width: 800px;
-            background: white;
-            z-index: -9999;
-            opacity: 0;
-            padding: 40px;
-            box-sizing: border-box;
-        }
+        /* CONTENEDOR OCULTO PARA IMPRESIÓN */
+        #pdf-printable-area { display: none; }
     </style>
 </head>
 <body>
@@ -156,9 +143,7 @@
         </div>
     </div>
 
-    <div id="pdf-generation-layer">
-        <div id="pdf-inner-content" class="academic-pdf-container"></div>
-    </div>
+    <div id="pdf-printable-area"></div>
 
     <div id="app-screen"> 
         <aside>
@@ -177,7 +162,7 @@
                 <div id="header-tools" style="display:none; align-items:center; gap:10px;">
                     <input type="text" id="buscador" class="search-bar" placeholder="🔍 Buscar y Resaltar..." onkeyup="filtrarLibros()">
                     <button class="btn-std" onclick="verTimeline()" style="background:#2980b9;">⏳ Cronología</button>
-                    <button class="btn-std" onclick="descargarPDFMasivo()" style="background:#c0392b;">📄 PDF Todo</button>
+                    <button class="btn-std" onclick="imprimirNativo('masivo')" style="background:#c0392b;">📄 PDF Todo</button>
                 </div>
             </header>
 
@@ -223,7 +208,7 @@
                 <div class="editor-toolbar">
                     <button class="tool-btn" onclick="formatText('bold')" title="Negrita"><b>B</b></button>
                     <button class="tool-btn" onclick="formatText('italic')" title="Cursiva"><i>I</i></button>
-                    <button class="tool-btn tool-highlight" onclick="formatText('hiliteColor', '#f1c40f')" title="Resaltar">🖍️</button>
+                    <button class="tool-btn tool-highlight" onclick="formatText('hiliteColor', '#fff176')" title="Resaltar">🖍️</button>
                     <button class="tool-btn" onclick="formatText('removeFormat')" title="Limpiar">🧹</button>
                     <div style="width:1px; background:#ccc; margin:0 10px;"></div>
                     <button class="tool-btn" onclick="formatText('undo')" title="Deshacer">↩️</button>
@@ -234,7 +219,7 @@
 
             <div class="zen-footer">
                 <button onclick="document.getElementById('modal-editor').style.display='none'" class="btn-std" style="background:#555;">Cancelar</button>
-                <button onclick="descargarPDFIndividual()" class="btn-std" style="background:#e74c3c;">📄 PDF Individual</button>
+                <button onclick="imprimirNativo('individual')" class="btn-std" style="background:#e74c3c;">📄 PDF Individual</button>
                 <button onclick="guardarEdicionModal()" class="btn-std" style="background:var(--accent);">💾 Guardar Cambios</button>
             </div>
         </div>
@@ -244,7 +229,7 @@
     <div id="timeline-modal" class="modal-overlay" onclick="this.style.display='none'"><div class="zen-editor" style="width:600px; height:auto; max-height:80vh; display:block; overflow-y:auto; padding:20px;"><h3 style="font-family:var(--font-title);">Cronología</h3><div id="timeline-container" style="padding:20px;"></div></div></div>
 
     <script>
-        // === CONFIG FIREBASE (TUS CLAVES) ===
+        // === CONFIG FIREBASE (PEGA TUS CLAVES AQUI) ===
        const firebaseConfig = {
   apiKey: "AIzaSyAkQHhQ7RbFh4g5Ra4eDDdn38QqdP5vdk4",
   authDomain: "laboratorioletras-da19b.firebaseapp.com",
@@ -279,13 +264,14 @@
         function copiarPromptIA() { document.getElementById("prompt-output").select(); document.execCommand("copy"); alert("Copiado"); }
         function cargarLibros() { if(!materiaActiva) return; db.collection('users').doc(usuarioActual.uid).collection('materias').doc(materiaActiva).collection('libros').orderBy('creado', 'desc').onSnapshot(snap => { librosCache = []; snap.forEach(doc => librosCache.push({id: doc.id, ...doc.data()})); renderizarLibros(librosCache); }); }
         
+        // RENDERIZADO WEB
         function renderizarLibros(l, term="") { 
             const c = document.getElementById('lista-libros'); c.innerHTML = ''; 
             l.forEach(d => { 
                 let t=d.titulo || "", a=d.autor || "", r=d.resumen || "";
                 if(term) {
                     const regex = new RegExp(`(${term})(?![^<]*>)`, 'gi');
-                    const span = "<mark>$1</mark>";
+                    const span = "<mark class='web-highlight'>$1</mark>";
                     t = t.replace(regex, span); a = a.replace(regex, span); r = r.replace(regex, span);
                 }
                 const imgHTML = d.img ? `<img src="${d.img}" class="book-img">` : `<div class="book-img" style="background:#eee;"></div>`; 
@@ -299,68 +285,57 @@
         function verTimeline() { const c = document.getElementById('timeline-container'); c.innerHTML = ''; const ord = librosCache.filter(l => l.anio > 0).sort((a,b) => a.anio - b.anio); if(!ord.length) c.innerHTML = "No hay fechas."; else ord.forEach(l => { const img = l.img ? `<img src="${l.img}" class="timeline-img" style="height:60px; margin-right:15px;">` : ''; c.innerHTML += `<div style="display:flex; align-items:center; margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #eee;"><strong style="font-size:1.5em; color:var(--primary); margin-right:20px;">${l.anio}</strong>${img}<div><strong>${l.titulo}</strong><br>${l.autor}</div></div>`; }); document.getElementById('timeline-modal').style.display='flex'; }
         
         // =========================================
-        // --- MOTOR DE PDF DEFINITIVO (v28 - ACADÉMICO) ---
+        // --- FUNCIÓN DE IMPRESIÓN NATIVA (v29) ---
         // =========================================
 
-        function generatePDF(filename) {
-            const overlay = document.getElementById('pdf-generation-layer');
-            const container = document.getElementById('pdf-inner-content');
-            
-            // 1. Mostrar capa invisible
-            overlay.style.display = 'block'; 
-            overlay.style.opacity = '1';
-            overlay.style.zIndex = '10000'; // Traer al frente para la foto
-
-            const opt = { 
-                margin: [20, 20, 20, 20],
-                filename: filename, 
-                image: { type: 'jpeg', quality: 0.98 }, 
-                html2canvas: { scale: 2, useCORS: true, letterRendering: true }, 
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } 
-            };
-            
-            // 2. Foto -> PDF -> Ocultar
-            html2pdf().from(container).set(opt).save().then(() => {
-                overlay.style.display = 'none'; 
-                overlay.style.zIndex = '-9999';
-            });
+        // Prepara el texto para que los párrafos se separen físicamente
+        function prepareTextForPrint(html) {
+            // Convierte cada bloque en un párrafo real con separación
+            // Esta estructura simple es la que mejor entienden las impresoras
+            let s = html.replace(/<div/g, '<p').replace(/<\/div>/g, '</p>');
+            return s;
         }
 
-        function descargarPDFMasivo() {
-            const container = document.getElementById('pdf-inner-content');
-            container.innerHTML = `<h1 style="text-align:center; text-decoration:underline;">${materiaActiva}</h1>`;
+        function imprimirNativo(modo) {
+            const printArea = document.getElementById('pdf-printable-area');
+            printArea.innerHTML = ""; // Limpiar
             
-            librosCache.forEach(l => {
-                // Inyectamos el contenido en el contenedor académico
-                container.innerHTML += `
-                    <div style="margin-bottom: 40px; page-break-inside: avoid;">
-                        <h2>${l.titulo}</h2>
-                        <p class="meta"><strong>${l.autor}</strong> (${l.anio || 'S/F'})</p>
-                        <div class="academic-body">${l.resumen}</div>
-                        <hr>
-                    </div>
+            // CONSTRUIR DOCUMENTO ACADÉMICO
+            let content = `<div class="academic-doc">`;
+            
+            if (modo === 'masivo') {
+                content += `<h1>${materiaActiva}</h1>`;
+                librosCache.forEach(l => {
+                    const text = prepareTextForPrint(l.resumen);
+                    content += `
+                        <div>
+                            <h2>${l.titulo}</h2>
+                            <p><i>${l.autor} (${l.anio || 'S/F'})</i></p>
+                            <div>${text}</div>
+                            <hr style="border:0; border-bottom:1px solid #ccc; margin:30px 0;">
+                        </div>
+                    `;
+                });
+            } else if (modo === 'individual') {
+                const t = document.getElementById('edit-titulo').value;
+                const a = document.getElementById('edit-autor').value;
+                const y = document.getElementById('edit-anio').value;
+                const r = document.getElementById('edit-resumen-div').innerHTML;
+                const text = prepareTextForPrint(r);
+                
+                content += `
+                    <h1>${t}</h1>
+                    <p style="text-align:center; font-style:italic;">${a} (${y})</p>
+                    <hr style="border:0; border-bottom:2px solid black; margin:20px 0;">
+                    <div>${text}</div>
                 `;
-            });
-            generatePDF(`Completo_${materiaActiva}.pdf`);
-        }
+            }
+            content += `</div>`;
+            
+            printArea.innerHTML = content;
 
-        function descargarPDFIndividual() {
-            const container = document.getElementById('pdf-inner-content');
-            const titulo = document.getElementById('edit-titulo').value;
-            const autor = document.getElementById('edit-autor').value;
-            const anio = document.getElementById('edit-anio').value;
-            const contenido = document.getElementById('edit-resumen-div').innerHTML;
-
-            container.innerHTML = `
-                <div style="page-break-inside: avoid;">
-                    <h2>${titulo}</h2>
-                    <p class="meta"><strong>${autor}</strong> (${anio})</p>
-                    <hr>
-                    <div class="academic-body">${contenido}</div>
-                </div>
-            `;
-            generatePDF(`${titulo}.pdf`);
+            // DISPARAR IMPRESIÓN
+            window.print();
         }
     </script>
 </body>
