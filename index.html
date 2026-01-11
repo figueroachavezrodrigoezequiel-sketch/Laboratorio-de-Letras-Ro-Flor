@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laboratorio de Letras (v23 - PDF Fix) 🏛️</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        /* --- ESTILOS GENERALES (INTACTOS) --- */
+        :root { --primary: #2c3e50; --accent: #d35400; --bg: #f9f7f1; --white: #ffffff; --text-serif: 'Merriweather', serif; --font-title: 'Playfair Display', serif; }
+        body { font-family: var(--text-serif); background: var(--bg); margin: 0; display: flex; height: 100vh; overflow: hidden; color: #2c3e50; }
+
+        /* LOGIN */
+        #login-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #2c3e50; display: flex; justify-content: center; align-items: center; z-index: 2000; flex-direction: column; color: white; background-image: radial-gradient(#34495e 1px, transparent 1px); background-size: 20px 20px; }
+        .login-box { background: var(--bg); padding: 40px; border-radius: 4px; width: 320px; color: #333; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+        .login-box input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; box-sizing: border-box; }
+        .btn-login { background: var(--primary); color: white; border: none; padding: 12px; width: 100%; font-weight: bold; cursor: pointer; text-transform: uppercase; }
+        .switch-auth { margin-top: 15px; font-size: 0.8em; cursor: pointer; text-decoration: underline; color: #777; }
+
+        /* APP LAYOUT */
+        #app-screen { display: none; width: 100%; height: 100%; display: flex; }
+        aside { width: 260px; background: #222; color: #eee; display: flex; flex-direction: column; padding: 25px; z-index: 10; font-family: sans-serif; }
+        .materia-item { padding: 12px; cursor: pointer; border-radius: 4px; margin-bottom: 8px; font-size: 0.9rem; border-left: 3px solid transparent; }
+        .materia-item.active { background: #333; border-left-color: var(--accent); color: white; font-weight: bold; }
+        
+        main { flex: 1; padding: 0; overflow-y: auto; display: flex; flex-direction: column; position: relative; background-image: linear-gradient(var(--bg) 2px, transparent 2px); background-size: 100% 30px; }
+        header { position: sticky; top: 0; background: rgba(249, 247, 241, 0.95); backdrop-filter: blur(5px); padding: 20px 40px; border-bottom: 1px solid #e0e0e0; z-index: 5; display: flex; justify-content: space-between; align-items: center; }
+        header h2 { font-family: var(--font-title); font-size: 2rem; color: var(--primary); margin: 0; }
+        
+        .search-bar { padding: 10px 20px; border: 1px solid #ccc; border-radius: 20px; width: 250px; outline: none; font-family: sans-serif; background: white; }
+        .content-area { padding: 40px; max-width: 900px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+
+        /* CARDS */
+        .book-card { background: white; padding: 25px; margin-bottom: 30px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); display: flex; gap: 25px; border: 1px solid #eee; position: relative; }
+        .book-card.ficcion { border-left: 4px solid var(--accent); }
+        .book-card.teoria { border-left: 4px solid #8e44ad; }
+        .book-img { width: 90px; height: 130px; background: #eee; object-fit: cover; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); flex-shrink: 0; }
+        
+        /* BUSCADOR: ETIQUETA MARK */
+        mark { background-color: #f1c40f; color: black; font-weight: bold; padding: 0 2px; border-radius: 2px; }
+
+        .card-content h2 { margin: 0 0 5px 0; font-family: var(--font-title); font-size: 1.4rem; color: var(--primary); }
+        .card-text { font-size: 1.05rem; line-height: 1.8; color: #444; white-space: pre-wrap; } 
+        .actions-bar { position: absolute; top: 20px; right: 20px; display: flex; gap: 5px; opacity: 0.5; transition: 0.3s; }
+        .book-card:hover .actions-bar { opacity: 1; }
+        .btn-icon { background: none; border: none; font-size: 1.1rem; cursor: pointer; padding: 5px; }
+        .btn-icon:hover { transform: scale(1.1); background:#eee; border-radius:4px;}
+        
+        .btn-std { background: var(--primary); color: white; border: none; padding: 8px 15px; border-radius: 3px; font-family: sans-serif; font-weight: bold; cursor: pointer; font-size: 0.85rem; margin-left: 5px; }
+        .btn-add { background: var(--accent); width: 100%; padding: 12px; font-size: 1rem; margin-top: 10px; color:white; border:none; cursor:pointer; font-weight:bold;}
+
+        /* EDITOR ZEN */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(44, 62, 80, 0.95); z-index: 5000; justify-content: center; align-items: center; }
+        .zen-editor { display: grid; grid-template-columns: 250px 1fr; grid-template-rows: 1fr auto; gap: 0; width: 95%; height: 90vh; background: #fdfdfd; box-shadow: 0 20px 50px rgba(0,0,0,0.5); overflow: hidden; }
+        .zen-sidebar { background: #f4f4f4; padding: 20px; border-right: 1px solid #ddd; display: flex; flex-direction: column; gap: 15px; font-family: sans-serif; grid-row: 1 / span 2; overflow-y: auto; }
+        .zen-sidebar input, .zen-sidebar select { width: 100%; padding: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+        .zen-main { padding: 40px; display: flex; flex-direction: column; overflow-y: auto; background: white; grid-row: 1; position: relative; }
+        .zen-title-input { font-family: var(--font-title); font-size: 2rem; border: none; border-bottom: 1px solid transparent; width: 100%; outline: none; color: var(--primary); margin-bottom: 20px; }
+        
+        .editor-toolbar { background: #eee; padding: 5px 10px; border-radius: 4px; margin-bottom: 10px; display: flex; gap: 5px; position: sticky; top: -40px; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .tool-btn { background: white; border: 1px solid #ccc; padding: 5px 12px; cursor: pointer; font-weight: bold; font-family: sans-serif; border-radius: 3px; }
+        .tool-btn:hover { background: #ddd; }
+        
+        .zen-textarea { flex: 1; border: none; outline: none; font-family: var(--text-serif); font-size: 1.15rem; line-height: 1.8; color: #333; min-height: 300px; white-space: pre-wrap; }
+        .zen-footer { grid-column: 2; grid-row: 2; background: #222; padding: 15px 30px; display: flex; justify-content: flex-end; align-items: center; color: white; gap:10px; z-index: 10; }
+
+        /* UPLOAD & PANEL */
+        .panel { background: white; padding: 30px; border-radius: 2px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 40px; border: 1px solid #e0e0e0; position: relative; }
+        .panel::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: var(--primary); }
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px; }
+        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-bottom: 2px solid #ddd; background: #fafafa; font-family: sans-serif; box-sizing: border-box; }
+        .file-upload-wrapper { border: 2px dashed #d1d1d1; padding: 15px; text-align: center; background: #fdfdfd; margin-bottom: 15px; cursor: pointer; position: relative; }
+        .file-upload-wrapper input { position: absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;}
+        .preview-box { margin-top: 10px; display: none; justify-content: center; }
+        .preview-box img { max-height: 100px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .size-warning { color: orange; font-size: 0.8em; display: none; margin-top: 5px; }
+        .card-footer-date { font-size: 0.75em; color: #aaa; margin-top: 15px; text-align: right; border-top: 1px solid #f0f0f0; padding-top: 10px; }
+
+        /* MODAL IA */
+        .ai-modal-content { background: white; width: 600px; padding: 30px; border-radius: 8px; font-family: sans-serif; position: relative; border-top: 5px solid #8e44ad; }
+        .btn-ai-custom { background: #8e44ad; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%; margin-top:5px; }
+        .ai-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px; }
+        .btn-ai { background: #fff; border: 1px solid #ddd; padding: 10px; cursor: pointer; text-align: left; transition: 0.2s; color: #555; }
+        .btn-ai:hover { background: #f0f0f0; border-color: #8e44ad; color: #333; }
+        .ai-prompt-box { margin-top: 20px; background: #222; color: #0f0; padding: 15px; font-family: monospace; font-size: 0.9em; border-radius: 4px; display: none; }
+        
+        /* TIMELINE */
+        .timeline-container { padding-left: 20px; }
+        .timeline-item { display: flex; align-items: center; margin-bottom: 25px; position: relative; padding-left: 40px; border-left: 4px solid var(--primary); }
+        .timeline-item::before { content: ''; position: absolute; left: -10px; width: 16px; height: 16px; background: var(--accent); border-radius: 50%; border: 2px solid white; }
+        .timeline-img { width: 50px; height: 70px; object-fit: cover; margin-right: 15px; border-radius: 4px; border: 1px solid #ccc; }
+
+        /* --- PDF PRINT CLASS (RENOVADO) --- */
+        .pdf-output-layer {
+            font-family: 'Times New Roman', serif;
+            font-size: 12pt;
+            color: #000;
+            line-height: 1.5;
+            text-align: justify;
+            background: white;
+            padding: 30px;
+            width: 100%;
+        }
+        .pdf-output-layer h2 { font-size: 16pt; margin-top: 0; text-decoration: underline; margin-bottom: 5px; }
+        .pdf-output-layer p, .pdf-output-layer div { margin-bottom: 1em; }
+        .pdf-output-layer hr { border: 0; border-top: 1px solid #000; margin: 20px 0; }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <div class="login-box">
+            <h3>🏛️ Laboratorio de Letras</h3>
+            <input type="email" id="email" placeholder="Correo electrónico">
+            <input type="password" id="password" placeholder="Contraseña">
+            <button class="btn-login" onclick="autenticar()">Entrar</button>
+            <p class="switch-auth" onclick="toggleAuthMode()">¿Primera vez? Crear cuenta</p>
+            <p id="error-msg" style="color:#e74c3c; font-size:0.8em; margin-top:10px;"></p>
+        </div>
+    </div>
+
+    <div id="app-screen"> 
+        <aside>
+            <div style="padding-bottom:20px; border-bottom:1px solid #444; margin-bottom:20px; color:#aaa; font-size:0.8rem;">
+                USUARIO<br><span id="user-display" style="color:white; font-size:1rem;">...</span><br>
+                <a href="#" onclick="cerrarSesion()" style="color:#e74c3c; text-decoration:none; margin-top:5px; display:inline-block;">Salir</a>
+            </div>
+            <h3 style="color:#888; font-size:0.75rem; letter-spacing:1px; margin-bottom:15px;">MATERIAS</h3>
+            <div id="lista-materias">Cargando...</div>
+            <button onclick="crearMateria()" style="width:100%; margin-top:20px; padding:10px; cursor:pointer; background:var(--green); color:white; border:none; border-radius:4px; font-weight:bold;">+ Asignatura</button>
+        </aside>
+
+        <main>
+            <header>
+                <h2 id="titulo-materia">Bienvenido</h2>
+                <div id="header-tools" style="display:none; align-items:center; gap:10px;">
+                    <input type="text" id="buscador" class="search-bar" placeholder="🔍 Buscar y Resaltar..." onkeyup="filtrarLibros()">
+                    <button class="btn-std" onclick="verTimeline()" style="background:#2980b9;">⏳ Cronología</button>
+                    <button class="btn-std" onclick="descargarPDFMasivo()" style="background:#c0392b;">📄 PDF Todo</button>
+                </div>
+            </header>
+
+            <div class="content-area">
+                <div id="panel-ingreso" class="panel" style="display:none;">
+                    <h4 style="margin-top:0; color:#555; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px;">Nueva Lectura</h4>
+                    <div class="input-row"><input type="text" id="titulo" placeholder="Título"><input type="text" id="autor" placeholder="Autor"></div>
+                    <div class="input-row"><input type="number" id="anio" placeholder="Año"><select id="tipo"><option value="ficcion">Ficción</option><option value="teoria">Teoría</option></select></div>
+                    <div class="file-upload-wrapper">
+                        <input type="file" id="file-input" accept="image/*" onchange="procesarImagen(this, 'preview-main-img', 'label-main', 'warning-main')">
+                        <div id="label-main" style="color:#888;">📂 Portada (Clic aquí)</div>
+                        <div class="preview-box" id="preview-main-img"><img src=""></div>
+                        <div id="warning-main" class="size-warning">⚠️ Imagen pesada.</div>
+                    </div>
+                    <input type="hidden" id="base64-store">
+                    <p style="font-size:0.8em; color:#888; margin-top:10px;">*Usa "Editar" para dar formato.</p>
+                    <textarea id="resumen" rows="3" placeholder="Resumen rápido..."></textarea>
+                    <button onclick="guardarLibro()" class="btn-add">Guardar</button>
+                </div>
+                <div id="lista-libros"></div>
+            </div>
+        </main>
+    </div>
+
+    <div id="modal-editor" class="modal-overlay">
+        <div class="zen-editor">
+            <div class="zen-sidebar">
+                <h4>Ficha</h4><input type="hidden" id="edit-id">
+                <label>Autor</label><input type="text" id="edit-autor">
+                <label>Año</label><input type="number" id="edit-anio">
+                <label>Tipo</label><select id="edit-tipo"><option value="ficcion">Ficción</option><option value="teoria">Teoría</option></select>
+                <hr style="border:0; border-top:1px solid #ddd; width:100%; margin:15px 0;">
+                <div class="file-upload-wrapper" style="padding:10px; font-size:0.8em;">
+                    <input type="file" id="edit-file-input" accept="image/*" onchange="procesarImagen(this, 'preview-modal-img', 'label-modal', 'warning-modal', true)">
+                    <div id="label-modal">Cambiar</div>
+                    <div class="preview-box" id="preview-modal-img" style="display:flex;"><img src="" id="edit-img-tag" style="max-height:80px;"></div>
+                </div>
+                <input type="hidden" id="edit-base64-store">
+            </div>
+
+            <div class="zen-main">
+                <input type="text" id="edit-titulo" class="zen-title-input" placeholder="Título">
+                <div class="editor-toolbar">
+                    <button class="tool-btn" onclick="formatText('bold')" title="Negrita"><b>B</b></button>
+                    <button class="tool-btn" onclick="formatText('italic')" title="Cursiva"><i>I</i></button>
+                    <button class="tool-btn" style="background:#fff176;" onclick="formatText('hiliteColor', '#f1c40f')" title="Resaltar">🖍️</button>
+                    <button class="tool-btn" onclick="formatText('removeFormat')" title="Limpiar">🧹</button>
+                    <div style="width:1px; background:#ccc; margin:0 10px;"></div>
+                    <button class="tool-btn" onclick="formatText('undo')" title="Deshacer">↩️</button>
+                    <button class="tool-btn" onclick="formatText('redo')" title="Rehacer">↪️</button>
+                </div>
+                <div id="edit-resumen-div" class="zen-textarea" contenteditable="true" placeholder="Escribe aquí..."></div>
+            </div>
+
+            <div class="zen-footer">
+                <button onclick="document.getElementById('modal-editor').style.display='none'" class="btn-std" style="background:#555;">Cancelar</button>
+                <button onclick="descargarPDFIndividual()" class="btn-std" style="background:#e74c3c;">📄 PDF Individual</button>
+                <button onclick="guardarEdicionModal()" class="btn-std" style="background:var(--accent);">💾 Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ai-modal" class="modal-overlay" onclick="if(event.target === this) this.style.display='none'">
+        <div class="ai-modal-content">
+            <h3 style="margin-top:0; color:#8e44ad;">✨ Asistente IA</h3>
+            <input type="hidden" id="ai-context-title"><input type="hidden" id="ai-context-author"><input type="hidden" id="ai-context-text">
+            <label style="font-weight:bold; font-size:0.9em;">Pregunta Libre:</label>
+            <input type="text" id="ai-custom-input" style="width:100%; padding:10px; margin-bottom:5px; border:1px solid #ccc; box-sizing:border-box;" placeholder="Ej: Analiza la relación padre-hijo...">
+            <button class="btn-ai-custom" onclick="generarPromptPersonalizado()">🤖 Generar Prompt</button>
+            <div class="ai-options">
+                <button class="btn-ai" onclick="generarPrompt('resumir')">📝 Resumir</button>
+                <button class="btn-ai" onclick="generarPrompt('analisis')">🧐 Simbología</button>
+                <button class="btn-ai" onclick="generarPrompt('citas')">💬 Citas</button>
+                <button class="btn-ai" onclick="generarPrompt('contexto')">🌍 Contexto</button>
+            </div>
+            <div id="ai-result" class="ai-prompt-box">
+                <textarea id="prompt-output" style="width:100%; background:transparent; border:none; color:#0f0; font-family:monospace; height:80px; outline:none; resize:none;" readonly></textarea>
+                <button onclick="copiarPromptIA()" style="width:100%; background:#444; color:white; border:none; padding:5px; cursor:pointer;">📋 Copiar</button>
+            </div>
+            <button onclick="document.getElementById('ai-modal').style.display='none'" style="position:absolute; top:10px; right:10px; background:none; border:none; font-size:1.2rem; cursor:pointer;">✖</button>
+        </div>
+    </div>
+
+    <div id="timeline-modal" class="modal-overlay" onclick="this.style.display='none'">
+        <div class="zen-editor" style="width:600px; height:auto; max-height:80vh; display:block; overflow-y:auto; padding:20px;">
+            <h3 style="font-family:var(--font-title);">Cronología</h3>
+            <div id="timeline-container" style="padding:20px;"></div>
+        </div>
+    </div>
+
+    <script>
+        // === CONFIG FIREBASE ===
+        const firebaseConfig = {
+  apiKey: "AIzaSyAkQHhQ7RbFh4g5Ra4eDDdn38QqdP5vdk4",
+  authDomain: "laboratorioletras-da19b.firebaseapp.com",
+  projectId: "laboratorioletras-da19b",
+  storageBucket: "laboratorioletras-da19b.firebasestorage.app",
+  messagingSenderId: "1466870954",
+  appId: "1:1466870954:web:7665d90b235909cb0a74d3",
+  measurementId: "G-ZHH1CWGPGN"
+};
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth(), db = firebase.firestore();
+        let usuarioActual = null, materiaActiva = null, isLoginMode = true, librosCache = [];
+
+        // AUTH
+        auth.onAuthStateChanged(user => { if (user) { usuarioActual = user; document.getElementById('login-screen').style.display = 'none'; document.getElementById('app-screen').style.display = 'flex'; document.getElementById('user-display').innerText = user.email; cargarMaterias(); } else { document.getElementById('login-screen').style.display = 'flex'; document.getElementById('app-screen').style.display = 'none'; } });
+        function toggleAuthMode() { isLoginMode = !isLoginMode; document.querySelector('.login-box h3').innerText = isLoginMode ? "Iniciar Sesión" : "Crear Cuenta"; document.querySelector('.btn-login').innerText = isLoginMode ? "Entrar" : "Registrar"; }
+        function autenticar() { const e=document.getElementById('email').value, p=document.getElementById('password').value; (isLoginMode?auth.signInWithEmailAndPassword(e,p):auth.createUserWithEmailAndPassword(e,p)).catch(e=>document.getElementById('error-msg').innerText=e.message); }
+        function cerrarSesion() { auth.signOut(); }
+
+        // CORE
+        function cargarMaterias() { db.collection('users').doc(usuarioActual.uid).collection('materias').onSnapshot(snap => { const l = document.getElementById('lista-materias'); l.innerHTML = ''; snap.forEach(doc => { const d = document.createElement('div'); d.className = `materia-item ${materiaActiva === doc.id ? 'active' : ''}`; d.innerText = doc.id; d.onclick = () => seleccionarMateria(doc.id); l.appendChild(d); }); }); }
+        function crearMateria() { const n = prompt("Nombre:"); if(n) db.collection('users').doc(usuarioActual.uid).collection('materias').doc(n).set({creado: Date.now()}); }
+        function seleccionarMateria(n) { materiaActiva = n; document.getElementById('titulo-materia').innerText = n; document.getElementById('panel-ingreso').style.display = 'block'; document.getElementById('header-tools').style.display = 'flex'; cargarLibros(); document.querySelectorAll('.materia-item').forEach(el => { el.classList.remove('active'); if(el.innerText === n) el.classList.add('active'); }); }
+        function procesarImagen(i,p,l,w,m=false) { if (i.files && i.files[0]) { const f = i.files[0]; document.getElementById(w).style.display = f.size > 1000000 ? 'block' : 'none'; const r = new FileReader(); r.onload = function(e) { document.getElementById(p).style.display = 'flex'; document.getElementById(p).querySelector('img').src = e.target.result; document.getElementById(l).innerText = "✅ " + f.name; if(m) document.getElementById('edit-base64-store').value = e.target.result; else document.getElementById('base64-store').value = e.target.result; }; r.readAsDataURL(f); } }
+        async function guardarLibro() { const t=document.getElementById('titulo').value; if(!t)return alert("Falta título"); try{ await db.collection('users').doc(usuarioActual.uid).collection('materias').doc(materiaActiva).collection('libros').add({titulo: t, autor: document.getElementById('autor').value, anio: parseInt(document.getElementById('anio').value)||0, tipo: document.getElementById('tipo').value, img: document.getElementById('base64-store').value, resumen: document.getElementById('resumen').value, creado: Date.now()}); document.getElementById('titulo').value=''; document.getElementById('resumen').value=''; document.getElementById('file-input').value=''; document.getElementById('preview-main-img').style.display='none'; document.getElementById('base64-store').value=''; } catch(e){ alert(e.message); } }
+
+        function formatText(cmd, value=null) { document.execCommand(cmd, false, value); }
+        function abrirEditor(id) { const l = librosCache.find(i => i.id === id); document.getElementById('edit-id').value=id; document.getElementById('edit-titulo').value=l.titulo; document.getElementById('edit-autor').value=l.autor; document.getElementById('edit-anio').value=l.anio; document.getElementById('edit-tipo').value=l.tipo; document.getElementById('edit-resumen-div').innerHTML=l.resumen; document.getElementById('edit-base64-store').value = l.img || ""; const pv = document.getElementById('preview-modal-img'); const tag = document.getElementById('edit-img-tag'); if(l.img) { pv.style.display='flex'; tag.src=l.img; } else { pv.style.display='none'; } document.getElementById('modal-editor').style.display='flex'; }
+        async function guardarEdicionModal() { const id = document.getElementById('edit-id').value; const htmlContent = document.getElementById('edit-resumen-div').innerHTML; try{ await db.collection('users').doc(usuarioActual.uid).collection('materias').doc(materiaActiva).collection('libros').doc(id).update({titulo: document.getElementById('edit-titulo').value, autor: document.getElementById('edit-autor').value, anio: parseInt(document.getElementById('edit-anio').value)||0, tipo: document.getElementById('edit-tipo').value, img: document.getElementById('edit-base64-store').value, resumen: htmlContent}); document.getElementById('modal-editor').style.display='none'; } catch(e){ alert(e.message); } }
+
+        // IA
+        function abrirIA(id) { const l = librosCache.find(x => x.id === id); if(!l) return; document.getElementById('ai-context-title').value = l.titulo; document.getElementById('ai-context-author').value = l.autor; document.getElementById('ai-context-text').value = l.resumen; document.getElementById('ai-custom-input').value = ""; document.getElementById('ai-result').style.display = 'none'; document.getElementById('ai-modal').style.display = 'flex'; }
+        function generarPrompt(tipo) { const t=document.getElementById('ai-context-title').value, a=document.getElementById('ai-context-author').value, txt=document.getElementById('ai-context-text').value; let p=""; if(tipo==='resumir') p=`Resume "${t}" (${a}). Notas: "${txt}"`; if(tipo==='analisis') p=`Simbolismo en "${t}" (${a}). Notas: "${txt}"`; if(tipo==='citas') p=`Citas de "${t}" (${a}). Notas: "${txt}"`; if(tipo==='contexto') p=`Contexto de "${t}" (${a}). Notas: "${txt}"`; mostrarPrompt(p); }
+        function generarPromptPersonalizado() { const q=document.getElementById('ai-custom-input').value; if(!q) return alert("Escribe pregunta"); const t=document.getElementById('ai-context-title').value, a=document.getElementById('ai-context-author').value, txt=document.getElementById('ai-context-text').value; const p=`PREGUNTA: "${q}". OBRA: "${t}" (${a}). NOTAS: "${txt}"`; mostrarPrompt(p); }
+        function mostrarPrompt(p) { document.getElementById('prompt-output').value = p; document.getElementById('ai-result').style.display = 'block'; }
+        function copiarPromptIA() { document.getElementById("prompt-output").select(); document.execCommand("copy"); alert("Copiado"); }
+
+        function cargarLibros() { if(!materiaActiva) return; db.collection('users').doc(usuarioActual.uid).collection('materias').doc(materiaActiva).collection('libros').orderBy('creado', 'desc').onSnapshot(snap => { librosCache = []; snap.forEach(doc => librosCache.push({id: doc.id, ...doc.data()})); renderizarLibros(librosCache); }); }
+        
+        // RENDERIZADO (BUSCADOR INTELIGENTE)
+        function renderizarLibros(l, term="") { 
+            const c = document.getElementById('lista-libros'); c.innerHTML = ''; 
+            l.forEach(d => { 
+                let t=d.titulo || "", a=d.autor || "", r=d.resumen || "";
+                
+                if(term) {
+                    const regex = new RegExp(`(${term})(?![^<]*>)`, 'gi');
+                    t = t.replace(regex, "<mark>$1</mark>");
+                    a = a.replace(regex, "<mark>$1</mark>");
+                    r = r.replace(regex, "<mark>$1</mark>");
+                }
+
+                const imgHTML = d.img ? `<img src="${d.img}" class="book-img">` : `<div class="book-img" style="background:#eee;"></div>`; 
+                const fecha = new Date(d.creado).toLocaleDateString(); 
+                
+                const card = document.createElement('div'); card.className = `book-card ${d.tipo}`; 
+                card.innerHTML = `${imgHTML}<div class="card-content" style="flex:1;"><div class="actions-bar"><button class="btn-icon" onclick="abrirIA('${d.id}')">✨</button><button class="btn-icon" onclick="abrirEditor('${d.id}')">✏️</button><button class="btn-icon" style="color:#c0392b;" onclick="borrarLibro('${d.id}')">🗑</button></div><span class="card-meta">${d.anio||'S/F'} • ${d.tipo}</span><h2>${t}</h2><div style="font-style:italic; margin-bottom:10px; font-family:var(--font-title);">${a}</div><div class="card-text">${r}</div><div class="card-footer-date">Registro: ${fecha}</div></div>`; c.appendChild(card); 
+            }); 
+        }
+        
+        function filtrarLibros() { 
+            const t = document.getElementById('buscador').value.trim(); 
+            if(!t) { renderizarLibros(librosCache); } 
+            else {
+                const termLower = t.toLowerCase();
+                const f = librosCache.filter(l => 
+                    (l.titulo && l.titulo.toLowerCase().includes(termLower)) || 
+                    (l.autor && l.autor.toLowerCase().includes(termLower)) || 
+                    (l.resumen && l.resumen.toLowerCase().includes(termLower))
+                );
+                renderizarLibros(f, t);
+            }
+        }
+
+        function borrarLibro(id) { if(confirm("¿Eliminar?")) db.collection('users').doc(usuarioActual.uid).collection('materias').doc(materiaActiva).collection('libros').doc(id).delete(); }
+        function verTimeline() { const c = document.getElementById('timeline-container'); c.innerHTML = ''; const ord = librosCache.filter(l => l.anio > 0).sort((a,b) => a.anio - b.anio); if(!ord.length) c.innerHTML = "No hay fechas."; else ord.forEach(l => { const img = l.img ? `<img src="${l.img}" class="timeline-img" style="height:60px; margin-right:15px;">` : ''; c.innerHTML += `<div style="display:flex; align-items:center; margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #eee;"><strong style="font-size:1.5em; color:var(--primary); margin-right:20px;">${l.anio}</strong>${img}<div><strong>${l.titulo}</strong><br>${l.autor}</div></div>`; }); document.getElementById('timeline-modal').style.display='flex'; }
+        
+        // --- MOTOR DE PDF RECONSTRUIDO (v23) ---
+        
+        // 1. Limpieza de texto (Convierte DIVs invisibles en <br> visibles)
+        function cleanTextForPdf(html) {
+            if (!html) return "";
+            // Reemplaza divs vacios o saltos simples por doble salto de linea
+            let clean = html.replace(/<div>/g, '<br>').replace(/<\/div>/g, '');
+            clean = clean.replace(/<p>/g, '<br><br>').replace(/<\/p>/g, '');
+            return clean;
+        }
+
+        function descargarPDFMasivo() {
+            const container = document.createElement('div');
+            container.className = 'pdf-output-layer';
+            container.innerHTML = `<h1>${materiaActiva}</h1>`;
+            
+            librosCache.forEach(l => {
+                const contentFixed = cleanTextForPdf(l.resumen);
+                container.innerHTML += `
+                    <div style="page-break-inside: avoid; margin-bottom: 30px; border-bottom: 1px solid #ccc; padding-bottom: 20px;">
+                        <h2>${l.titulo}</h2>
+                        <p style="font-style:italic;"><strong>${l.autor}</strong> (${l.anio || 'S/F'})</p>
+                        <div>${contentFixed}</div>
+                    </div>
+                `;
+            });
+
+            const opt = { 
+                margin: 20, 
+                filename: `Completo_${materiaActiva}.pdf`, 
+                image: { type: 'jpeg', quality: 0.98 }, 
+                html2canvas: { scale: 2 }, 
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } // EVITA CORTES
+            };
+            html2pdf().from(container).set(opt).save();
+        }
+
+        function descargarPDFIndividual() {
+            const container = document.createElement('div');
+            container.className = 'pdf-output-layer';
+            
+            const titulo = document.getElementById('edit-titulo').value;
+            const autor = document.getElementById('edit-autor').value;
+            const anio = document.getElementById('edit-anio').value;
+            const contenido = document.getElementById('edit-resumen-div').innerHTML;
+            
+            const contentFixed = cleanTextForPdf(contenido);
+
+            container.innerHTML = `
+                <h2>${titulo}</h2>
+                <p style="font-style:italic; margin-bottom:20px;"><strong>${autor}</strong> (${anio})</p>
+                <hr>
+                <div>${contentFixed}</div>
+            `;
+            
+            // Renderizado fuera de pantalla
+            container.style.position = 'absolute';
+            container.style.left = '-9999px';
+            container.style.width = '800px'; 
+            document.body.appendChild(container);
+
+            const opt = { 
+                margin: 20, 
+                filename: `${titulo}.pdf`, 
+                image: { type: 'jpeg', quality: 0.98 }, 
+                html2canvas: { scale: 2 }, 
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } 
+            };
+            
+            html2pdf().from(container).set(opt).save().then(() => {
+                document.body.removeChild(container);
+            });
+        }
+    </script>
+</body>
+</html>
