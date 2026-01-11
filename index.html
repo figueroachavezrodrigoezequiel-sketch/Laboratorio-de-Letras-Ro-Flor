@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Laboratorio de Letras (v23 - PDF Fix) 🏛️</title>
+    <title>Laboratorio de Letras (v25 - Final PDF) 🏛️</title>
     
     <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 
@@ -13,7 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <style>
-        /* --- ESTILOS GENERALES (INTACTOS) --- */
+        /* --- ESTILOS GENERALES --- */
         :root { --primary: #2c3e50; --accent: #d35400; --bg: #f9f7f1; --white: #ffffff; --text-serif: 'Merriweather', serif; --font-title: 'Playfair Display', serif; }
         body { font-family: var(--text-serif); background: var(--bg); margin: 0; display: flex; height: 100vh; overflow: hidden; color: #2c3e50; }
 
@@ -43,7 +43,6 @@
         .book-card.teoria { border-left: 4px solid #8e44ad; }
         .book-img { width: 90px; height: 130px; background: #eee; object-fit: cover; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); flex-shrink: 0; }
         
-        /* BUSCADOR: ETIQUETA MARK */
         mark { background-color: #f1c40f; color: black; font-weight: bold; padding: 0 2px; border-radius: 2px; }
 
         .card-content h2 { margin: 0 0 5px 0; font-family: var(--font-title); font-size: 1.4rem; color: var(--primary); }
@@ -97,20 +96,33 @@
         .timeline-item::before { content: ''; position: absolute; left: -10px; width: 16px; height: 16px; background: var(--accent); border-radius: 50%; border: 2px solid white; }
         .timeline-img { width: 50px; height: 70px; object-fit: cover; margin-right: 15px; border-radius: 4px; border: 1px solid #ccc; }
 
-        /* --- PDF PRINT CLASS (RENOVADO) --- */
-        .pdf-output-layer {
+        /* --- PDF ESTILOS (PARA LA CAPA SUPERPUESTA) --- */
+        #pdf-overlay-layer {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            z-index: 10000; /* POR ENCIMA DE TODO */
+            padding: 40px;
+            box-sizing: border-box;
+            overflow: visible; /* Permitir que se expanda */
+            display: none; /* Oculto por defecto */
+        }
+        
+        .pdf-content-wrapper {
             font-family: 'Times New Roman', serif;
             font-size: 12pt;
             color: #000;
             line-height: 1.5;
             text-align: justify;
-            background: white;
-            padding: 30px;
-            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
         }
-        .pdf-output-layer h2 { font-size: 16pt; margin-top: 0; text-decoration: underline; margin-bottom: 5px; }
-        .pdf-output-layer p, .pdf-output-layer div { margin-bottom: 1em; }
-        .pdf-output-layer hr { border: 0; border-top: 1px solid #000; margin: 20px 0; }
+        
+        .pdf-content-wrapper h2 { font-size: 16pt; margin-top: 20px; text-decoration: underline; margin-bottom: 5px; }
+        .pdf-content-wrapper p, .pdf-content-wrapper div { margin-bottom: 1em; page-break-inside: avoid; }
+        .pdf-content-wrapper hr { border: 0; border-top: 1px solid #000; margin: 20px 0; }
     </style>
 </head>
 <body>
@@ -124,6 +136,10 @@
             <p class="switch-auth" onclick="toggleAuthMode()">¿Primera vez? Crear cuenta</p>
             <p id="error-msg" style="color:#e74c3c; font-size:0.8em; margin-top:10px;"></p>
         </div>
+    </div>
+
+    <div id="pdf-overlay-layer">
+        <div id="pdf-inner-content" class="pdf-content-wrapper"></div>
     </div>
 
     <div id="app-screen"> 
@@ -235,7 +251,7 @@
     </div>
 
     <script>
-        // === CONFIG FIREBASE ===
+        // === CONFIG FIREBASE (TUS CLAVES AQUI) ===
         const firebaseConfig = {
   apiKey: "AIzaSyAkQHhQ7RbFh4g5Ra4eDDdn38QqdP5vdk4",
   authDomain: "laboratorioletras-da19b.firebaseapp.com",
@@ -276,118 +292,92 @@
 
         function cargarLibros() { if(!materiaActiva) return; db.collection('users').doc(usuarioActual.uid).collection('materias').doc(materiaActiva).collection('libros').orderBy('creado', 'desc').onSnapshot(snap => { librosCache = []; snap.forEach(doc => librosCache.push({id: doc.id, ...doc.data()})); renderizarLibros(librosCache); }); }
         
-        // RENDERIZADO (BUSCADOR INTELIGENTE)
+        // RENDERIZADO
         function renderizarLibros(l, term="") { 
             const c = document.getElementById('lista-libros'); c.innerHTML = ''; 
             l.forEach(d => { 
                 let t=d.titulo || "", a=d.autor || "", r=d.resumen || "";
-                
                 if(term) {
                     const regex = new RegExp(`(${term})(?![^<]*>)`, 'gi');
                     t = t.replace(regex, "<mark>$1</mark>");
                     a = a.replace(regex, "<mark>$1</mark>");
                     r = r.replace(regex, "<mark>$1</mark>");
                 }
-
                 const imgHTML = d.img ? `<img src="${d.img}" class="book-img">` : `<div class="book-img" style="background:#eee;"></div>`; 
                 const fecha = new Date(d.creado).toLocaleDateString(); 
-                
                 const card = document.createElement('div'); card.className = `book-card ${d.tipo}`; 
                 card.innerHTML = `${imgHTML}<div class="card-content" style="flex:1;"><div class="actions-bar"><button class="btn-icon" onclick="abrirIA('${d.id}')">✨</button><button class="btn-icon" onclick="abrirEditor('${d.id}')">✏️</button><button class="btn-icon" style="color:#c0392b;" onclick="borrarLibro('${d.id}')">🗑</button></div><span class="card-meta">${d.anio||'S/F'} • ${d.tipo}</span><h2>${t}</h2><div style="font-style:italic; margin-bottom:10px; font-family:var(--font-title);">${a}</div><div class="card-text">${r}</div><div class="card-footer-date">Registro: ${fecha}</div></div>`; c.appendChild(card); 
             }); 
         }
-        
-        function filtrarLibros() { 
-            const t = document.getElementById('buscador').value.trim(); 
-            if(!t) { renderizarLibros(librosCache); } 
-            else {
-                const termLower = t.toLowerCase();
-                const f = librosCache.filter(l => 
-                    (l.titulo && l.titulo.toLowerCase().includes(termLower)) || 
-                    (l.autor && l.autor.toLowerCase().includes(termLower)) || 
-                    (l.resumen && l.resumen.toLowerCase().includes(termLower))
-                );
-                renderizarLibros(f, t);
-            }
-        }
-
+        function filtrarLibros() { const t = document.getElementById('buscador').value.trim(); if(!t) { renderizarLibros(librosCache); } else { const termLower = t.toLowerCase(); const f = librosCache.filter(l => (l.titulo && l.titulo.toLowerCase().includes(termLower)) || (l.autor && l.autor.toLowerCase().includes(termLower)) || (l.resumen && l.resumen.toLowerCase().includes(termLower))); renderizarLibros(f, t); } }
         function borrarLibro(id) { if(confirm("¿Eliminar?")) db.collection('users').doc(usuarioActual.uid).collection('materias').doc(materiaActiva).collection('libros').doc(id).delete(); }
         function verTimeline() { const c = document.getElementById('timeline-container'); c.innerHTML = ''; const ord = librosCache.filter(l => l.anio > 0).sort((a,b) => a.anio - b.anio); if(!ord.length) c.innerHTML = "No hay fechas."; else ord.forEach(l => { const img = l.img ? `<img src="${l.img}" class="timeline-img" style="height:60px; margin-right:15px;">` : ''; c.innerHTML += `<div style="display:flex; align-items:center; margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #eee;"><strong style="font-size:1.5em; color:var(--primary); margin-right:20px;">${l.anio}</strong>${img}<div><strong>${l.titulo}</strong><br>${l.autor}</div></div>`; }); document.getElementById('timeline-modal').style.display='flex'; }
         
-        // --- MOTOR DE PDF RECONSTRUIDO (v23) ---
-        
-        // 1. Limpieza de texto (Convierte DIVs invisibles en <br> visibles)
-        function cleanTextForPdf(html) {
-            if (!html) return "";
-            // Reemplaza divs vacios o saltos simples por doble salto de linea
-            let clean = html.replace(/<div>/g, '<br>').replace(/<\/div>/g, '');
-            clean = clean.replace(/<p>/g, '<br><br>').replace(/<\/p>/g, '');
-            return clean;
+        // --- FUNCIÓN MAGICA DE PDF (REPARADA) ---
+        function formatForPrint(html) {
+            if(!html) return "";
+            // 1. Reemplazamos los saltos falsos por saltos REALES y forzados
+            return html
+                .replace(/<div>/g, '<br>') // Div comienza = salto
+                .replace(/<\/div>/g, '<br>') // Div termina = salto
+                .replace(/<p>/g, '') // Párrafo inicia = nada (usamos el cierre)
+                .replace(/<\/p>/g, '<br><br>'); // Párrafo termina = DOBLE salto
+        }
+
+        function generatePDF(elementId, filename) {
+            const overlay = document.getElementById('pdf-overlay-layer');
+            const container = document.getElementById('pdf-inner-content');
+            
+            // Hacemos visible la capa pero encima de todo
+            overlay.style.display = 'block'; 
+            
+            const opt = { 
+                margin: 20, 
+                filename: filename, 
+                image: { type: 'jpeg', quality: 0.98 }, 
+                html2canvas: { scale: 2, useCORS: true }, 
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } 
+            };
+
+            html2pdf().from(container).set(opt).save().then(() => {
+                overlay.style.display = 'none'; // Ocultar al terminar
+                container.innerHTML = ''; // Limpiar
+            });
         }
 
         function descargarPDFMasivo() {
-            const container = document.createElement('div');
-            container.className = 'pdf-output-layer';
-            container.innerHTML = `<h1>${materiaActiva}</h1>`;
+            const container = document.getElementById('pdf-inner-content');
+            container.innerHTML = `<h1 style="text-align:center;">${materiaActiva}</h1>`;
             
             librosCache.forEach(l => {
-                const contentFixed = cleanTextForPdf(l.resumen);
+                const fixed = formatForPrint(l.resumen);
                 container.innerHTML += `
-                    <div style="page-break-inside: avoid; margin-bottom: 30px; border-bottom: 1px solid #ccc; padding-bottom: 20px;">
+                    <div style="margin-bottom:30px; border-bottom:1px solid #ccc; padding-bottom:20px;">
                         <h2>${l.titulo}</h2>
                         <p style="font-style:italic;"><strong>${l.autor}</strong> (${l.anio || 'S/F'})</p>
-                        <div>${contentFixed}</div>
-                    </div>
-                `;
+                        <div>${fixed}</div>
+                    </div>`;
             });
-
-            const opt = { 
-                margin: 20, 
-                filename: `Completo_${materiaActiva}.pdf`, 
-                image: { type: 'jpeg', quality: 0.98 }, 
-                html2canvas: { scale: 2 }, 
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } // EVITA CORTES
-            };
-            html2pdf().from(container).set(opt).save();
+            generatePDF('pdf-inner-content', `Completo_${materiaActiva}.pdf`);
         }
 
         function descargarPDFIndividual() {
-            const container = document.createElement('div');
-            container.className = 'pdf-output-layer';
-            
+            const container = document.getElementById('pdf-inner-content');
             const titulo = document.getElementById('edit-titulo').value;
             const autor = document.getElementById('edit-autor').value;
             const anio = document.getElementById('edit-anio').value;
             const contenido = document.getElementById('edit-resumen-div').innerHTML;
             
-            const contentFixed = cleanTextForPdf(contenido);
+            const fixed = formatForPrint(contenido);
 
             container.innerHTML = `
                 <h2>${titulo}</h2>
-                <p style="font-style:italic; margin-bottom:20px;"><strong>${autor}</strong> (${anio})</p>
+                <p style="font-style:italic;"><strong>${autor}</strong> (${anio})</p>
                 <hr>
-                <div>${contentFixed}</div>
+                <div>${fixed}</div>
             `;
-            
-            // Renderizado fuera de pantalla
-            container.style.position = 'absolute';
-            container.style.left = '-9999px';
-            container.style.width = '800px'; 
-            document.body.appendChild(container);
-
-            const opt = { 
-                margin: 20, 
-                filename: `${titulo}.pdf`, 
-                image: { type: 'jpeg', quality: 0.98 }, 
-                html2canvas: { scale: 2 }, 
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } 
-            };
-            
-            html2pdf().from(container).set(opt).save().then(() => {
-                document.body.removeChild(container);
-            });
+            generatePDF('pdf-inner-content', `${titulo}.pdf`);
         }
     </script>
 </body>
